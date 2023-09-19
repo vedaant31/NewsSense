@@ -5,6 +5,7 @@ import sqlite3
 import os
 from textblob import TextBlob
 from models import get_sentiment_and_entities
+import json
 
 currentlocation = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,7 +40,6 @@ def index():
             searched = True
             keywords = request.form['article-keywords-phrase']
             language = request.form['language']
-            # (YYYY-MM-DD)
             search_from = request.form['search-from']
             search_to = request.form['search-to']
             if request.form.get('dropdown-menu'):
@@ -49,7 +49,7 @@ def index():
 
             url = 'https://newsapi.org/v2/everything?'
             if keywords != '':
-                url += 'q=' + keywords + '&'
+                 url += 'q=' + keywords + '&'
             if language != '':
                 url += 'language=' + language + '&'
             else:
@@ -60,12 +60,23 @@ def index():
                 url += 'to=' + search_to + '&'
             if sorting != '':
                 url += 'sortBy=' + sorting + '&'
-            url += 'apiKey=' + API_KEY
+                url += 'apiKey=' + API_KEY
 
             response = requests.get(url)
-            # print(response.json())
-            articles = response.json()['articles']
-            return render_template('./index.html', data=articles, x=logged_in, y=user_name, z=searched)
+
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    articles = data.get('articles', [])
+                except json.JSONDecodeError as e:
+                    print(f"JSON decoding error: {e}")
+                    articles = []
+        else:
+            print(f"API request failed with status code: {response.status_code}")
+            articles = []
+
+        return render_template('./index.html', data=articles, x=logged_in, y=user_name, z=searched)
+
     else:
         searched = False
         url = (f'https://newsapi.org/v2/top-headlines?'
@@ -144,14 +155,18 @@ def article_info():
         info = eval(request.form['article-info'])
     else:
         info = eval(request.form['submit-button'])
-    b = TextBlob(info['description'])
-    info['language'] = b.detect_language()
-    if info['language'] == 'en':
-        info['sentiment'], info['entities'], info['explained_entities'] = get_sentiment_and_entities(
-            info['description'])
-    else:
-        info['sentiment'] = 'Cannot analyze in non-English language'
-        info['entities'] = 'Cannot analyze in non-English language'
+    # try:
+    #     b = TextBlob(info['description'])
+    #     info['language'] = b.detect_language()
+    # except Exception as e:
+    #     print("Error:", str(e))
+    #     info['language'] = TextBlob(info['description']).detect_language()
+
+    # if info['language'] == 'en':
+        info['sentiment'], info['entities'], info['explained_entities'] = get_sentiment_and_entities(info['description'])
+    # else:
+    #     info['sentiment'] = 'Cannot analyze in non-English language'
+    #     info['entities'] = 'Cannot analyze in non-English language'
     if request.form.get('submit-button'):
         shared_to = request.form['shared-to']
         sqlconnection = sqlite3.Connection(currentlocation + "/shared.db")
